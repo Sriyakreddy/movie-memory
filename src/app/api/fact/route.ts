@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { generateMovieFact } from "@/lib/facts";
 import type { GetFactResponse } from "@/types/api";
 
+const FACT_CACHE_TTL_MS = 30_000;
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    if (latest) {
+    if (latest && Date.now() - latest.createdAt.getTime() < FACT_CACHE_TTL_MS) {
       const payload: GetFactResponse = {
         fact: {
           id: latest.id,
