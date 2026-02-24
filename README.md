@@ -2,6 +2,10 @@
 
 Movie Memory is a Next.js full-stack app where a signed-in user stores a favorite movie and generates movie-specific facts.
 
+## Live App
+
+- Production: https://movie-memory-app-ivory.vercel.app
+
 ## Stack
 
 - Next.js (App Router)
@@ -28,6 +32,12 @@ NEXTAUTH_URL=http://localhost:3000
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 OPENAI_API_KEY=...
+```
+
+For production (Vercel), set:
+
+```env
+NEXTAUTH_URL=https://movie-memory-app-ivory.vercel.app
 ```
 
 3. Run Prisma migration/generate if needed:
