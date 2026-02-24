@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Movie Memory
 
-## Getting Started
+Movie Memory is a Next.js full-stack app where a signed-in user stores a favorite movie and generates movie-specific facts.
 
-First, run the development server:
+## Stack
+
+- Next.js (App Router)
+- TypeScript
+- NextAuth (Google OAuth)
+- Prisma + PostgreSQL
+- OpenAI Chat Completions API
+- Vitest
+
+## Run Locally
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Configure environment variables in `.env`:
+
+```env
+DATABASE_URL=...
+NEXTAUTH_SECRET=...
+NEXTAUTH_URL=http://localhost:3000
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+OPENAI_API_KEY=...
+```
+
+3. Run Prisma migration/generate if needed:
+
+```bash
+npx prisma migrate dev
+npx prisma generate
+```
+
+4. Start development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Variant B Notes (Frontend/API Focus)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 1) Typed API Layer
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Implemented endpoints:
 
-## Learn More
+- `GET /api/me`
+- `PUT /api/me/movie`
+- `GET /api/fact`
 
-To learn more about Next.js, take a look at the following resources:
+Typed client wrapper: `src/lib/api.ts`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Single `request()` helper for consistent fetch behavior
+- Runtime response parsing into typed DTOs
+- Normalized `ApiClientError` for HTTP error handling (`status` + message)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 2) Edit Movie Flow (Inline)
 
-## Deploy on Vercel
+Dashboard inline edit supports:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `Save` + `Cancel`
+- Optimistic UI update
+- Rollback on server failure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Files:
+
+- `src/app/_components/favorite-card.tsx`
+- `src/lib/movie-edit.ts`
+
+### 3) Client-Side Caching Strategy
+
+Chosen approach: **custom React state** (no SWR/React Query).
+
+Why:
+
+- Requirement is small and local to one dashboard flow
+- Keeps behavior explicit for take-home review
+- Avoids extra dependency/config overhead
+
+Behavior:
+
+- Cache stores last fact + timestamp + movie key
+- TTL is 30 seconds
+- `Get Fact` reuses cache within TTL
+- `Force New Fact` bypasses cache
+- Cache invalidates when favorite movie changes
+
+File:
+
+- `src/app/_components/dashboard-client.tsx`
+
+### 4) Minimal Tests
+
+- API client error handling: `src/lib/api.test.ts` (401 and 500 normalization)
+- Movie edit behavior: `src/lib/movie-edit.test.ts` (optimistic update, revert, cancel, success)
+
+Run tests:
+
+```bash
+npm test
+```
+
+## Security & Correctness
+
+- Server-side movie validation in `src/lib/movie.ts`
+- Auth checks on protected API routes via NextAuth session
+- User-scoped queries/updates (no cross-user access)
+- Secrets remain server-side (`OPENAI_API_KEY` only used in API route/lib)
+- Graceful fallback for missing Google name/photo in dashboard UI

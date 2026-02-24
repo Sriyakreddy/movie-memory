@@ -19,6 +19,14 @@
   }
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+[id] {
+  scroll-margin-top: 16px;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
