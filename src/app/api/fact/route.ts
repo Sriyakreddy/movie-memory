@@ -6,6 +6,8 @@ import { generateMovieFact } from "@/lib/facts";
 import type { GetFactResponse } from "@/types/api";
 
 const FACT_CACHE_TTL_MS = 30_000;
+const MAX_REGEN_ATTEMPTS = 3;
+
 
 function normalizeFactText(value: string): string {
   return value.trim().toLowerCase();
@@ -85,7 +87,7 @@ export async function GET(req: NextRequest) {
     const latestNormalized = latest ? normalizeFactText(latest.text) : "";
     let text = "";
 
-    while (true) {
+    for (let attempt = 0; attempt < MAX_REGEN_ATTEMPTS; attempt += 1) {
       text = await generateMovieFact(user.favoriteMovie, {
         priorFacts: priorFactsForMovie,
         recentMovies,
