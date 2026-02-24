@@ -7,6 +7,19 @@ Movie Memory is a full-stack Next.js application where users sign in with Google
 - Repository: https://github.com/Sriyakreddy/movie-memory
 - Live App (Vercel): https://movie-memory-app-ivory.vercel.app
 
+## Submission Checklist
+
+- [x] GitHub repository link included
+- [x] Setup instructions included
+- [x] Required environment variables listed
+- [x] Database migration steps documented
+- [x] Architecture overview provided
+- [x] Variant selected and justified
+- [x] Key tradeoffs listed
+- [x] 2-hour improvement plan listed
+- [x] AI usage note included
+- [ ] Optional walkthrough video link (add if recorded)
+
 ## 2) Setup Instructions
 
 ### Prerequisites
@@ -194,3 +207,45 @@ npm test
   - typed API contracts
   - optimistic edit + rollback
   - 30-second cache behavior and invalidation
+
+## Walkthrough Script (Simple)
+
+### 30-second intro
+
+Hi, this is my Variant B submission for the full-stack take-home.  
+I built Movie Memory using Next.js, TypeScript, NextAuth, Prisma, PostgreSQL, and OpenAI.  
+This project focuses on typed API contracts, client-side orchestration, inline editing with rollback, and 30-second fact caching with invalidation on movie change.
+
+### 3–5 minute flow (what to show)
+
+1. Show repo structure: `src/app`, `src/lib`, `prisma/schema.prisma`.
+2. Show Google sign-in and redirect to dashboard.
+3. Show inline edit on dashboard:
+   - edit movie
+   - save
+   - cancel behavior
+   - mention optimistic update + rollback on failure.
+4. Show facts section:
+   - `Get Fact`
+   - `Force New Fact`
+   - explain 30-second reuse and invalidation when movie changes.
+5. Show typed client and APIs:
+   - `src/lib/api.ts`
+   - `/api/me`, `/api/me/movie`, `/api/fact`.
+6. Show tests:
+   - `src/lib/api.test.ts`
+   - `src/lib/movie-edit.test.ts`.
+7. Close with tradeoffs and next improvements.
+
+### 30-second closing
+
+In summary, I prioritized correctness and explainability over unnecessary complexity.  
+I implemented typed API contracts, secure auth-based scoping, robust error handling, and clear frontend state transitions.  
+If I had more time, I would add integration tests, better observability, and stronger production safeguards like endpoint rate limiting.
+
+## Secret Safety Note
+
+- Real secrets are not committed to this repository.
+- `.env*` files are gitignored by `.gitignore`.
+- Only placeholder values are shown in this README.
+- Production secrets are configured in Vercel Environment Variables.
