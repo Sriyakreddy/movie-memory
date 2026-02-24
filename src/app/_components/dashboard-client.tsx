@@ -17,6 +17,11 @@ type FactCache = {
   timestampMs: number;
 };
 
+type FactFetchMeta = {
+  cached: boolean;
+  atMs: number;
+} | null;
+
 const FACT_CACHE_TTL_MS = 30_000;
 
 function factsForMovie(facts: FactDto[], movie: string): FactDto[] {
@@ -51,6 +56,7 @@ export default function DashboardClient({ initialMovie, initialFacts }: Dashboar
   });
   const [factLoading, setFactLoading] = useState(false);
   const [factError, setFactError] = useState<string | null>(null);
+  const [factMeta, setFactMeta] = useState<FactFetchMeta>(null);
 
   const currentFact = useMemo(() => facts[0] ?? null, [facts]);
 
@@ -95,14 +101,16 @@ export default function DashboardClient({ initialMovie, initialFacts }: Dashboar
 
       if (!forceNew && cache && cache.movie === favoriteMovie && Date.now() - cache.timestampMs < FACT_CACHE_TTL_MS) {
         setFacts([cache.fact]);
+        setFactMeta({ cached: true, atMs: Date.now() });
         setFactLoading(false);
         return;
       }
 
       try {
-        const { fact } = await apiClient.getFact({ forceNew });
+        const { fact, cached } = await apiClient.getFact({ forceNew });
         setFacts([fact]);
         setCache({ movie: favoriteMovie, fact, timestampMs: Date.now() });
+        setFactMeta({ cached, atMs: Date.now() });
       } catch (error) {
         if (error instanceof ApiClientError) {
           setFactError(error.message);
@@ -121,6 +129,7 @@ export default function DashboardClient({ initialMovie, initialFacts }: Dashboar
     setCache(null);
     setFacts([]);
     setFactError(null);
+    setFactMeta(null);
   }
 
   return (
@@ -136,6 +145,7 @@ export default function DashboardClient({ initialMovie, initialFacts }: Dashboar
           currentFact={currentFact}
           loading={factLoading}
           error={factError}
+          fetchMeta={factMeta}
           onGetFact={() => fetchFact(false)}
           onGenerateNewFact={() => fetchFact(true)}
         />

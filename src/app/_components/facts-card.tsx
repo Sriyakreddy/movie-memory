@@ -8,6 +8,7 @@ type FactsCardProps = {
   currentFact: FactDto | null;
   loading: boolean;
   error: string | null;
+  fetchMeta: { cached: boolean; atMs: number } | null;
   onGetFact: () => void;
   onGenerateNewFact: () => void;
 };
@@ -34,6 +35,7 @@ export default function FactsCard({
   currentFact,
   loading,
   error,
+  fetchMeta,
   onGetFact,
   onGenerateNewFact,
 }: FactsCardProps) {
@@ -57,6 +59,12 @@ export default function FactsCard({
           Force New Fact
         </button>
       </div>
+
+      {fetchMeta && (
+        <p className="mt-3 text-xs text-white/60">
+          Last request: {fetchMeta.cached ? "Cached" : "Fresh"} at {new Date(fetchMeta.atMs).toLocaleTimeString()}
+        </p>
+      )}
 
       {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
 
