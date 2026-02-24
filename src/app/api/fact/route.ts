@@ -6,6 +6,11 @@ import { generateMovieFact } from "@/lib/facts";
 import type { GetFactResponse } from "@/types/api";
 
 const FACT_CACHE_TTL_MS = 30_000;
+const MAX_REGEN_ATTEMPTS = 3;
+
+function normalizeFactText(value: string): string {
+  return value.trim().toLowerCase();
+}
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -31,33 +36,31 @@ export async function GET(req: NextRequest) {
 
   const forceNew = req.nextUrl.searchParams.get("forceNew") === "1";
 
-  if (!forceNew) {
-    const latest = await prisma.fact.findFirst({
-      where: {
-        userId: user.id,
-        movie: user.favoriteMovie,
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        movie: true,
-        text: true,
-        createdAt: true,
-      },
-    });
+  const latest = await prisma.fact.findFirst({
+    where: {
+      userId: user.id,
+      movie: user.favoriteMovie,
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      movie: true,
+      text: true,
+      createdAt: true,
+    },
+  });
 
-    if (latest && Date.now() - latest.createdAt.getTime() < FACT_CACHE_TTL_MS) {
-      const payload: GetFactResponse = {
-        fact: {
-          id: latest.id,
-          movie: latest.movie,
-          text: latest.text,
-          createdAt: latest.createdAt.toISOString(),
-        },
-        cached: true,
-      };
-      return NextResponse.json(payload);
-    }
+  if (!forceNew && latest && Date.now() - latest.createdAt.getTime() < FACT_CACHE_TTL_MS) {
+    const payload: GetFactResponse = {
+      fact: {
+        id: latest.id,
+        movie: latest.movie,
+        text: latest.text,
+        createdAt: latest.createdAt.toISOString(),
+      },
+      cached: true,
+    };
+    return NextResponse.json(payload);
   }
 
   try {
@@ -80,10 +83,19 @@ export async function GET(req: NextRequest) {
       new Set(recentFactContext.map((fact) => fact.movie).filter((movie) => movie !== user.favoriteMovie)),
     ).slice(0, 6);
 
-    const text = await generateMovieFact(user.favoriteMovie, {
-      priorFacts: priorFactsForMovie,
-      recentMovies,
-    });
+    const latestNormalized = latest ? normalizeFactText(latest.text) : "";
+    let text = "";
+
+    for (let attempt = 0; attempt < MAX_REGEN_ATTEMPTS; attempt += 1) {
+      text = await generateMovieFact(user.favoriteMovie, {
+        priorFacts: priorFactsForMovie,
+        recentMovies,
+      });
+
+      if (!latestNormalized || normalizeFactText(text) !== latestNormalized) {
+        break;
+      }
+    }
 
     const created = await prisma.fact.create({
       data: {
