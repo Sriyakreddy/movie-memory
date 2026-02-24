@@ -105,6 +105,7 @@ export async function generateMovieFact(movie: string, options: GenerateMovieFac
   const prompt = buildPrompt(movie, options);
   const models = ["gpt-4o-mini", "gpt-4.1-mini"];
   let lastError = "";
+  let bestCandidate = "";
 
   for (const model of models) {
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -148,18 +149,26 @@ export async function generateMovieFact(movie: string, options: GenerateMovieFac
       }
 
       if (fact === "I can't verify a specific fact for this movie.") {
-        throw new Error(`Could not verify a specific fact for \"${movie}\" right now.`);
+        lastError = `Could not verify a specific fact for \"${movie}\" right now.`;
+        continue;
       }
 
       const factWithMovie = hasStrongMovieMatch(fact, movie) ? fact : `${movie}: ${fact}`;
 
       if (isLikelyGenericFact(factWithMovie) || !hasConcreteDetail(factWithMovie)) {
+        if (!bestCandidate) {
+          bestCandidate = factWithMovie;
+        }
         lastError = "OpenAI returned a generic or non-specific fact.";
         continue;
       }
 
       return factWithMovie;
     }
+  }
+
+  if (bestCandidate) {
+    return bestCandidate;
   }
 
   throw new Error(lastError || `Could not generate a specific fact for \"${movie}\". Please try again.`);

@@ -6,7 +6,7 @@ import { generateMovieFact } from "@/lib/facts";
 import type { GetFactResponse } from "@/types/api";
 
 const FACT_CACHE_TTL_MS = 30_000;
-const MAX_REGEN_ATTEMPTS = 3;
+const MAX_REGEN_ATTEMPTS = 6;
 
 
 function normalizeFactText(value: string): string {
@@ -84,18 +84,35 @@ export async function GET(req: NextRequest) {
       new Set(recentFactContext.map((fact) => fact.movie).filter((movie) => movie !== user.favoriteMovie)),
     ).slice(0, 6);
 
-    const latestNormalized = latest ? normalizeFactText(latest.text) : "";
+    const blockedFacts = new Set(priorFactsForMovie.map(normalizeFactText));
     let text = "";
 
     for (let attempt = 0; attempt < MAX_REGEN_ATTEMPTS; attempt += 1) {
       text = await generateMovieFact(user.favoriteMovie, {
-        priorFacts: priorFactsForMovie,
+        priorFacts: Array.from(blockedFacts),
         recentMovies,
       });
 
-      if (!latestNormalized || normalizeFactText(text) !== latestNormalized) {
+      const normalized = normalizeFactText(text);
+      if (!blockedFacts.has(normalized)) {
         break;
       }
+
+      blockedFacts.add(normalized);
+      text = "";
+    }
+
+    if (!text && latest) {
+      const payload: GetFactResponse = {
+        fact: {
+          id: latest.id,
+          movie: latest.movie,
+          text: latest.text,
+          createdAt: latest.createdAt.toISOString(),
+        },
+        cached: true,
+      };
+      return NextResponse.json(payload);
     }
 
     const created = await prisma.fact.create({
