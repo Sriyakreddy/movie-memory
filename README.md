@@ -1,63 +1,95 @@
 # Movie Memory
 
-Movie Memory is a Next.js full-stack app where a signed-in user stores a favorite movie and generates movie-specific facts.
+Movie Memory is a full-stack Next.js application where users sign in with Google, set a favorite movie, and generate movie-specific facts.
 
-## Live App
+## 1) GitHub Repository
 
-- Production: https://movie-memory-app-ivory.vercel.app
+- Repository: https://github.com/Sriyakreddy/movie-memory
+- Live App (Vercel): https://movie-memory-app-ivory.vercel.app
 
-## Stack
+## 2) Setup Instructions
 
-- Next.js (App Router)
-- TypeScript
-- NextAuth (Google OAuth)
-- Prisma + PostgreSQL
-- OpenAI Chat Completions API
-- Vitest
+### Prerequisites
 
-## Run Locally
+- Node.js 20+
+- npm
+- PostgreSQL database (Neon or local Postgres)
+- Google Cloud OAuth credentials
+- OpenAI API key
 
-1. Install dependencies:
+### Install and Run
 
 ```bash
 npm install
+npx prisma migrate dev
+npx prisma generate
+npm run dev
 ```
 
-2. Configure environment variables in `.env`:
+App runs at `http://localhost:3000`.
+
+## 3) Required Environment Variables
+
+Create `.env` in project root:
 
 ```env
-DATABASE_URL=...
-NEXTAUTH_SECRET=...
+DATABASE_URL=postgresql://...
+NEXTAUTH_SECRET=your_long_random_secret
 NEXTAUTH_URL=http://localhost:3000
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-OPENAI_API_KEY=...
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+OPENAI_API_KEY=your_openai_api_key
 ```
 
-For production (Vercel), set:
+Production (Vercel) values:
 
-```env
-NEXTAUTH_URL=https://movie-memory-app-ivory.vercel.app
-```
+- `NEXTAUTH_URL=https://movie-memory-app-ivory.vercel.app`
+- keep all other variables configured in Vercel Project Settings -> Environment Variables.
 
-3. Run Prisma migration/generate if needed:
+## 4) Database Migration Steps
+
+Local development:
 
 ```bash
 npx prisma migrate dev
 npx prisma generate
 ```
 
-4. Start development server:
+Production (recommended build command in Vercel):
 
 ```bash
-npm run dev
+prisma migrate deploy && next build
 ```
 
-## Variant B Notes (Frontend/API Focus)
+## 5) Architecture Overview (Variant B)
 
-### 1) Typed API Layer
+### High-level design
 
-Implemented endpoints:
+The app uses a server-rendered Next.js App Router architecture with client-side orchestration for Variant B behavior.
+
+- UI and pages: `src/app`
+- Typed client and domain logic: `src/lib`
+- Database schema and migrations: `prisma`
+
+Authentication is implemented with NextAuth + Google OAuth and Prisma adapter for persisted sessions.
+
+### Data model rationale
+
+Core Prisma models:
+
+- `User`: profile identity from Google and app state (`favoriteMovie`, `createdAt`)
+- `Fact`: generated fact text, linked to `User`, scoped by movie
+- `Account`, `Session`, `VerificationToken`: standard NextAuth persistence models
+
+Why this schema:
+
+- Keeps authentication concerns and app data separated but linked via `User`
+- Supports per-user authorization checks on every API route
+- Supports fact history while allowing movie-scoped filtering and cache behavior
+
+### API contracts (typed)
+
+Variant B endpoints:
 
 - `GET /api/me`
 - `PUT /api/me/movie`
@@ -65,49 +97,82 @@ Implemented endpoints:
 
 Typed client wrapper: `src/lib/api.ts`
 
-- Single `request()` helper for consistent fetch behavior
-- Runtime response parsing into typed DTOs
-- Normalized `ApiClientError` for HTTP error handling (`status` + message)
+- One request utility for consistent headers and JSON handling
+- Runtime parsing and DTO shape checks
+- Normalized `ApiClientError` with status + message
 
-### 2) Edit Movie Flow (Inline)
+### Frontend state strategy (client orchestration)
 
-Dashboard inline edit supports:
+Main orchestration lives in `src/app/_components/dashboard-client.tsx`.
 
-- `Save` + `Cancel`
-- Optimistic UI update
-- Rollback on server failure
+- Loads user state through typed API client
+- Handles inline movie edit result updates
+- Maintains simple in-memory fact cache:
+  - cache key = current movie
+  - value = latest fact + timestamp
+  - TTL = 30 seconds
+- Supports explicit bypass with `Force New Fact`
+- Clears cached/latest fact when favorite movie changes
 
-Files:
+Why this approach:
 
-- `src/app/_components/favorite-card.tsx`
-- `src/lib/movie-edit.ts`
+- Small scope and easy reasoning for assessment
+- No additional state libraries required
+- Straightforward to explain optimistic and failure flows
 
-### 3) Client-Side Caching Strategy
+### Error handling and failure cases
 
-Chosen approach: **custom React state** (no SWR/React Query).
+- API routes return structured `{ error }` with meaningful status codes
+- Client converts non-OK responses into `ApiClientError`
+- Movie save flow uses optimistic update and rolls back if request fails
+- Fact generation surfaces server-side errors without exposing secrets
+
+### Security and authorization
+
+- Session checks in protected API routes via `getServerSession`
+- User scope enforced by session email -> user lookup on server
+- No user-id trust from client payloads
+- Server-side input validation for movie values (`src/lib/movie.ts`)
+- Secrets remain server-side (OpenAI/Google credentials not exposed in client code)
+
+## 6) Variant Chosen and Why
+
+Chosen variant: **Variant B — Frontend/API-Focused (Client Orchestration)**.
 
 Why:
 
-- Requirement is small and local to one dashboard flow
-- Keeps behavior explicit for take-home review
-- Avoids extra dependency/config overhead
+- Focuses on typed contracts, client state, and failure handling
+- Best aligned with practical frontend full-stack expectations
+- Lets us demonstrate clear reasoning around caching and optimistic UI
 
-Behavior:
+## 7) Key Tradeoffs
 
-- Cache stores last fact + timestamp + movie key
-- TTL is 30 seconds
-- `Get Fact` reuses cache within TTL
-- `Force New Fact` bypasses cache
-- Cache invalidates when favorite movie changes
+- Kept caching in component state instead of adding SWR/React Query:
+  - Pro: lower complexity, easier interview explanation
+  - Con: cache is page-session scoped (not shared globally)
+- Used a latest-fact-focused UI for clarity:
+  - Pro: less noise and simpler behavior around invalidation
+  - Con: reduced in-app historical browsing depth
+- Prisma + NextAuth DB sessions over JWT-only setup:
+  - Pro: explicit server-side control and consistency
+  - Con: requires stable database configuration in all environments
 
-File:
+## 8) What I Would Improve with 2 More Hours
 
-- `src/app/_components/dashboard-client.tsx`
+1. Add route-level integration tests for `/api/me`, `/api/me/movie`, and `/api/fact`.
+2. Add optimistic UI telemetry/notifications and clearer retry affordances.
+3. Add admin/debug page for viewing users and sign-in events (protected).
+4. Improve observability (structured logs + error IDs surfaced in UI).
+5. Add lightweight rate limiting on fact generation endpoint.
 
-### 4) Minimal Tests
+## 9) Tests Added (Variant B requirements)
 
-- API client error handling: `src/lib/api.test.ts` (401 and 500 normalization)
-- Movie edit behavior: `src/lib/movie-edit.test.ts` (optimistic update, revert, cancel, success)
+- `src/lib/api.test.ts`
+  - verifies API client error normalization for 401 and 500 responses
+- `src/lib/movie-edit.test.ts`
+  - verifies optimistic movie edit behavior
+  - verifies rollback on failure
+  - verifies success state update and cancel behavior
 
 Run tests:
 
@@ -115,10 +180,17 @@ Run tests:
 npm test
 ```
 
-## Security & Correctness
+## 10) AI Usage Notes
 
-- Server-side movie validation in `src/lib/movie.ts`
-- Auth checks on protected API routes via NextAuth session
-- User-scoped queries/updates (no cross-user access)
-- Secrets remain server-side (`OPENAI_API_KEY` only used in API route/lib)
-- Graceful fallback for missing Google name/photo in dashboard UI
+- Used AI to accelerate refactoring and API/client consistency checks.
+- Used AI to draft and refine prompt rules for movie-specific fact generation.
+- Used AI for iterative UI text cleanup and route consolidation decisions.
+- All code paths were manually validated through lint/tests/build and runtime checks.
+
+## Optional (Encouraged)
+
+- A 3–5 minute walkthrough video can explain:
+  - auth flow
+  - typed API contracts
+  - optimistic edit + rollback
+  - 30-second cache behavior and invalidation
