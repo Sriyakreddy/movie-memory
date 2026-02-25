@@ -3,7 +3,6 @@
 Movie Memory is a full-stack web app where users sign in with Google, set a favorite movie, and fetch movie-specific facts.
 
 - GitHub: https://github.com/Sriyakreddy/movie-memory
-- Live app: https://movie-memory-app-ivory.vercel.app
 
 ## Setup Instructions
 
@@ -39,10 +38,10 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 OPENAI_API_KEY=your_openai_api_key
 ```
 
-For Vercel production:
+For production:
 
 - Set `NEXTAUTH_URL` to your deployed domain
-- Add all variables in Vercel Project Settings -> Environment Variables
+- Configure all variables in your hosting environment
 
 ## Database Migration Steps
 
@@ -55,7 +54,7 @@ npx prisma generate
 
 ### Production
 
-Use this in your Vercel build pipeline:
+Use this in your production build pipeline:
 
 ```bash
 prisma migrate deploy && next build
@@ -165,4 +164,3 @@ Run tests:
 ```bash
 npm test
 ```
-
