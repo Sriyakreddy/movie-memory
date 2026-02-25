@@ -3,6 +3,7 @@
 Movie Memory is a full-stack web app where users sign in with Google, set a favorite movie, and fetch movie-specific facts.
 
 - GitHub: https://github.com/Sriyakreddy/movie-memory
+- Live app: https://movie-memory-app-ivory.vercel.app
 
 ## Setup Instructions
 
