@@ -8,9 +8,27 @@ import type { GetFactResponse } from "@/types/api";
 const FACT_CACHE_TTL_MS = 30_000;
 const MAX_REGEN_ATTEMPTS = 6;
 
-
 function normalizeFactText(value: string): string {
   return value.trim().toLowerCase();
+}
+
+type FactRow = {
+  id: string;
+  movie: string;
+  text: string;
+  createdAt: Date;
+};
+
+function toFactResponse(fact: FactRow, cached: boolean): GetFactResponse {
+  return {
+    fact: {
+      id: fact.id,
+      movie: fact.movie,
+      text: fact.text,
+      createdAt: fact.createdAt.toISOString(),
+    },
+    cached,
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -52,20 +70,11 @@ export async function GET(req: NextRequest) {
   });
 
   if (!forceNew && latest && Date.now() - latest.createdAt.getTime() < FACT_CACHE_TTL_MS) {
-    const payload: GetFactResponse = {
-      fact: {
-        id: latest.id,
-        movie: latest.movie,
-        text: latest.text,
-        createdAt: latest.createdAt.toISOString(),
-      },
-      cached: true,
-    };
-    return NextResponse.json(payload);
+    return NextResponse.json(toFactResponse(latest, true));
   }
 
   try {
-    const recentFactContext = await prisma.fact.findMany({
+    const recentFacts = await prisma.fact.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -75,51 +84,42 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const priorFactsForMovie = recentFactContext
+    const previousFactsForMovie = recentFacts
       .filter((fact) => fact.movie === user.favoriteMovie)
       .map((fact) => fact.text)
       .slice(0, 8);
 
     const recentMovies = Array.from(
-      new Set(recentFactContext.map((fact) => fact.movie).filter((movie) => movie !== user.favoriteMovie)),
+      new Set(recentFacts.map((fact) => fact.movie).filter((movie) => movie !== user.favoriteMovie)),
     ).slice(0, 6);
 
-    const blockedFacts = new Set(priorFactsForMovie.map(normalizeFactText));
-    let text = "";
+    const seenFacts = new Set(previousFactsForMovie.map(normalizeFactText));
+    let generatedText = "";
 
     for (let attempt = 0; attempt < MAX_REGEN_ATTEMPTS; attempt += 1) {
-      text = await generateMovieFact(user.favoriteMovie, {
-        priorFacts: Array.from(blockedFacts),
+      generatedText = await generateMovieFact(user.favoriteMovie, {
+        priorFacts: Array.from(seenFacts),
         recentMovies,
       });
 
-      const normalized = normalizeFactText(text);
-      if (!blockedFacts.has(normalized)) {
+      const normalized = normalizeFactText(generatedText);
+      if (!seenFacts.has(normalized)) {
         break;
       }
 
-      blockedFacts.add(normalized);
-      text = "";
+      seenFacts.add(normalized);
+      generatedText = "";
     }
 
-    if (!text && latest) {
-      const payload: GetFactResponse = {
-        fact: {
-          id: latest.id,
-          movie: latest.movie,
-          text: latest.text,
-          createdAt: latest.createdAt.toISOString(),
-        },
-        cached: true,
-      };
-      return NextResponse.json(payload);
+    if (!generatedText && latest) {
+      return NextResponse.json(toFactResponse(latest, true));
     }
 
     const created = await prisma.fact.create({
       data: {
         userId: user.id,
         movie: user.favoriteMovie,
-        text,
+        text: generatedText,
       },
       select: {
         id: true,
@@ -129,17 +129,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const payload: GetFactResponse = {
-      fact: {
-        id: created.id,
-        movie: created.movie,
-        text: created.text,
-        createdAt: created.createdAt.toISOString(),
-      },
-      cached: false,
-    };
-
-    return NextResponse.json(payload);
+    return NextResponse.json(toFactResponse(created, false));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Fact generation failed";
     return NextResponse.json({ error: message }, { status: 500 });

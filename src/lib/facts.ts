@@ -1,4 +1,7 @@
 const FACT_MAX_LENGTH = 500;
+const OPENAI_MODELS = ["gpt-4o-mini", "gpt-4.1-mini"];
+const MAX_MODEL_ATTEMPTS = 2;
+const OPENAI_FACT_REJECT = "I can't verify a specific fact for this movie.";
 
 type GenerateMovieFactOptions = {
   priorFacts?: string[];
@@ -103,12 +106,11 @@ export async function generateMovieFact(movie: string, options: GenerateMovieFac
   }
 
   const prompt = buildPrompt(movie, options);
-  const models = ["gpt-4o-mini", "gpt-4.1-mini"];
   let lastError = "";
   let bestCandidate = "";
 
-  for (const model of models) {
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+  for (const model of OPENAI_MODELS) {
+    for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt += 1) {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -148,8 +150,8 @@ export async function generateMovieFact(movie: string, options: GenerateMovieFac
         continue;
       }
 
-      if (fact === "I can't verify a specific fact for this movie.") {
-        lastError = `Could not verify a specific fact for \"${movie}\" right now.`;
+      if (fact === OPENAI_FACT_REJECT) {
+        lastError = `Could not verify a specific fact for "${movie}" right now.`;
         continue;
       }
 
@@ -171,5 +173,5 @@ export async function generateMovieFact(movie: string, options: GenerateMovieFac
     return bestCandidate;
   }
 
-  throw new Error(lastError || `Could not generate a specific fact for \"${movie}\". Please try again.`);
+  throw new Error(lastError || `Could not generate a specific fact for "${movie}". Please try again.`);
 }
